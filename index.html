@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบบันทึกน้ำหนัก-ส่วนสูงออนไลน์</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { kanit: ['Kanit', 'sans-serif'] },
+          colors: {
+            pastel: {
+              blue: '#B8D4E3',
+              'blue-light': '#D6EAF8',
+              'blue-dark': '#7FB3D3',
+              yellow: '#F9E79F',
+              'yellow-light': '#FCF3CF',
+              'yellow-dark': '#F4D03F',
+              cream: '#FDFEFE',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Kanit', sans-serif; }
+    body { background: linear-gradient(135deg, #D6EAF8 0%, #FCF3CF 50%, #D6EAF8 100%); min-height: 100vh; }
+    .tab-active { background: linear-gradient(135deg, #3498db, #2980b9); color: white; box-shadow: 0 4px 15px rgba(52,152,219,0.4); }
+    .tab-inactive { background: white; color: #555; }
+    .tab-inactive:hover { background: #f0f0f0; }
+    .btn-primary { background: linear-gradient(135deg, #3498db, #2980b9); transition: all 0.3s ease; }
+    .btn-primary:hover { background: linear-gradient(135deg, #2980b9, #1a5276); box-shadow: 0 6px 20px rgba(52,152,219,0.5); transform: translateY(-2px); }
+    .btn-success { background: linear-gradient(135deg, #27ae60, #1e8449); transition: all 0.3s ease; }
+    .btn-success:hover { background: linear-gradient(135deg, #1e8449, #145a32); box-shadow: 0 6px 20px rgba(39,174,96,0.5); transform: translateY(-2px); }
+    .btn-warning { background: linear-gradient(135deg, #f39c12, #d68910); transition: all 0.3s ease; }
+    .btn-warning:hover { background: linear-gradient(135deg, #d68910, #b7950b); box-shadow: 0 6px 20px rgba(243,156,18,0.5); transform: translateY(-2px); }
+    .btn-danger { background: linear-gradient(135deg, #e74c3c, #cb4335); transition: all 0.3s ease; }
+    .btn-danger:hover { background: linear-gradient(135deg, #cb4335, #922b21); box-shadow: 0 6px 20px rgba(231,76,60,0.5); transform: translateY(-2px); }
+    .btn-secondary { background: linear-gradient(135deg, #95a5a6, #7f8c8d); transition: all 0.3s ease; }
+    .btn-secondary:hover { background: linear-gradient(135deg, #7f8c8d, #616a6b); box-shadow: 0 6px 20px rgba(149,165,166,0.5); transform: translateY(-2px); }
+    .card { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .input-field { border: 2px solid #B8D4E3; border-radius: 10px; padding: 10px 14px; width: 100%; transition: all 0.3s ease; }
+    .input-field:focus { border-color: #3498db; box-shadow: 0 0 0 3px rgba(52,152,219,0.15); outline: none; }
+    table th { background: linear-gradient(135deg, #3498db, #2980b9); color: white; }
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="font-kanit">
+
+  <div class="max-w-6xl mx-auto py-6 px-4">
+    <!-- Header -->
+    <div class="text-center mb-6">
+      <h1 class="text-3xl font-bold text-blue-800">_weight-Height Recorder</h1>
+      <h2 class="text-xl text-yellow-600 font-medium">ระบบบันทึกน้ำหนัก-ส่วนสูงออนไลน์</h2>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex justify-center gap-3 mb-6">
+      <button id="tabTeacher" onclick="switchTab('teacher')" class="tab-active px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-300">
+        สำหรับครู (จัดการข้อมูล)
+      </button>
+      <button id="tabStudent" onclick="switchTab('student')" class="tab-inactive px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-300">
+        สำหรับนักเรียน (วิเคราะห์ผล)
+      </button>
+    </div>
+
+    <!-- ==================== แท็บครู ==================== -->
+    <div id="panelTeacher" class="fade-in">
+      <!-- ฟอร์มกรอกข้อมูล -->
+      <div class="card p-6 mb-6">
+        <h3 class="text-lg font-bold text-blue-700 mb-4">กรอกข้อมูลนักเรียน</h3>
+        <form id="studentForm" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <input type="hidden" id="rowId" value="">
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">รหัสนักเรียน</label>
+            <input type="text" id="studentId" class="input-field" placeholder="รหัสนักเรียน" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">ชื่อ-สกุล</label>
+            <input type="text" id="fullName" class="input-field" placeholder="ชื่อ-สกุล" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">ชั้น</label>
+            <input type="text" id="classRoom" class="input-field" placeholder="เช่น ม.3/1" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">เพศ</label>
+            <select id="gender" class="input-field" required>
+              <option value="">-- เลือกเพศ --</option>
+              <option value="ชาย">ชาย</option>
+              <option value="หญิง">หญิง</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">อายุ</label>
+            <input type="number" id="age" class="input-field" placeholder="ปี" min="1" max="25" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">น้ำหนัก (kg)</label>
+            <input type="number" id="weight" class="input-field" placeholder="กก." step="0.1" min="1" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">ส่วนสูง (cm)</label>
+            <input type="number" id="height" class="input-field" placeholder="ซม." step="0.1" min="1" required>
+          </div>
+          <div class="flex items-end gap-2">
+            <button type="submit" id="btnSave" class="btn-primary text-white px-5 py-2.5 rounded-xl font-semibold flex-1">บันทึกข้อมูล</button>
+            <button type="button" onclick="clearForm()" class="btn-secondary text-white px-5 py-2.5 rounded-xl font-semibold">ล้างฟอร์ม</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- อัปโหลด Excel -->
+      <div class="card p-6 mb-6">
+        <h3 class="text-lg font-bold text-blue-700 mb-4">นำเข้าข้อมูลจากไฟล์ Excel</h3>
+        <div class="flex flex-wrap items-center gap-3">
+          <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" class="block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer">
+          <button onclick="uploadExcel()" class="btn-success text-white px-5 py-2.5 rounded-xl font-semibold">อัปโหลดและบันทึก</button>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">รองรับหัวข้อภาษาไทย: รหัสนักเรียน, ชื่อ-สกุล, ชั้น, เพศ, อายุ, น้ำหนัก, ส่วนสูง</p>
+      </div>
+
+      <!-- ตารางข้อมูล -->
+      <div class="card p-6">
+        <h3 class="text-lg font-bold text-blue-700 mb-4">ตารางข้อมูลนักเรียน</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr>
+                <th class="px-4 py-3 text-left rounded-tl-xl">รหัส</th>
+                <th class="px-4 py-3 text-left">ชื่อ-สกุล</th>
+                <th class="px-4 py-3 text-left">ชั้น</th>
+                <th class="px-4 py-3 text-center">เพศ</th>
+                <th class="px-4 py-3 text-center">อายุ</th>
+                <th class="px-4 py-3 text-center">น้ำหนัก</th>
+                <th class="px-4 py-3 text-center">ส่วนสูง</th>
+                <th class="px-4 py-3 text-center rounded-tr-xl">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="teacherTableBody" class="divide-y divide-gray-100">
+              <tr><td colspan="8" class="text-center py-8 text-gray-400">ยังไม่มีข้อมูล - กดปุ่ม "โหลดข้อมูล" ด้านล่าง</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 text-center">
+          <button onclick="loadTeacherData()" class="btn-primary text-white px-6 py-2.5 rounded-xl font-semibold">โหลดข้อมูล</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== แท็บนักเรียน ==================== -->
+    <div id="panelStudent" class="hidden fade-in">
+      <div class="card p-6 mb-6 text-center">
+        <h3 class="text-lg font-bold text-blue-700 mb-4">เรียกดูข้อมูลและวิเคราะห์ผล</h3>
+        <button onclick="loadStudentData()" class="btn-primary text-white px-8 py-3 rounded-xl font-semibold text-lg">เรียกดูข้อมูลจาก Google Sheet</button>
+      </div>
+
+      <div id="studentAnalysis" class="hidden">
+        <!-- ช่องค้นหา -->
+        <div class="card p-6 mb-6">
+          <div class="flex items-center gap-3">
+            <span class="text-blue-700 font-semibold">ค้นหา:</span>
+            <input type="text" id="searchInput" class="input-field flex-1" placeholder="พิมพ์รหัสนักเรียน หรือ ชื่อ-สกุล..." oninput="filterStudentTable()">
+          </div>
+        </div>
+
+        <!-- กราฟ -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div class="card p-6">
+            <h4 class="text-md font-bold text-blue-700 mb-3 text-center">สถิติภาพรวมตามเกณฑ์ BMI</h4>
+            <div class="relative" style="max-width:320px;margin:0 auto;">
+              <canvas id="bmiChart"></canvas>
+            </div>
+          </div>
+          <div class="card p-6">
+            <h4 class="text-md font-bold text-blue-700 mb-3 text-center">สถิติสัดส่วนเพศ</h4>
+            <div class="relative" style="max-width:320px;margin:0 auto;">
+              <canvas id="genderChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- ตารางสรุป -->
+        <div class="card p-6 mb-6">
+          <h3 class="text-lg font-bold text-blue-700 mb-4">ตารางข้อมูลนักเรียน</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr>
+                  <th class="px-3 py-3 text-left rounded-tl-xl">รหัส</th>
+                  <th class="px-3 py-3 text-left">ชื่อ-สกุล</th>
+                  <th class="px-3 py-3 text-center">เพศ</th>
+                  <th class="px-3 py-3 text-center">น้ำหนัก</th>
+                  <th class="px-3 py-3 text-center">ส่วนสูง</th>
+                  <th class="px-3 py-3 text-center">BMI</th>
+                  <th class="px-3 py-3 text-center rounded-tr-xl">เกณฑ์</th>
+                </tr>
+              </thead>
+              <tbody id="studentTableBody" class="divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ปุ่มดาวน์โหลด -->
+        <div class="text-center">
+          <button onclick="downloadCSV()" class="btn-success text-white px-6 py-2.5 rounded-xl font-semibold">ดาวน์โหลดข้อมูล (CSV)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center mt-8 py-4 text-sm text-gray-500">
+      Copyright &copy; 2025 ระบบบันทึกน้ำหนัก-ส่วนสูงออนไลน์ | By ครูเปิงมางfc
+    </div>
+  </div>
+
+<script>
+var allData = [];
+var bmiChartInstance = null;
+var genderChartInstance = null;
+
+function switchTab(tab) {
+  var tabTeacher = document.getElementById('tabTeacher');
+  var tabStudent = document.getElementById('tabStudent');
+  var panelTeacher = document.getElementById('panelTeacher');
+  var panelStudent = document.getElementById('panelStudent');
+
+  if (tab === 'teacher') {
+    tabTeacher.className = 'tab-active px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-300';
+    tabStudent.className = 'tab-inactive px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-300';
+    panelTeacher.classList.remove('hidden');
+    panelStudent.classList.add('hidden');
+  } else {
+    tabStudent.className = 'tab-active px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-300';
+    tabTeacher.className = 'tab-inactive px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-300';
+    panelStudent.classList.remove('hidden');
+    panelTeacher.classList.add('hidden');
+  }
+}
+
+function clearForm() {
+  document.getElementById('studentForm').reset();
+  document.getElementById('rowId').value = '';
+  document.getElementById('btnSave').textContent = 'บันทึกข้อมูล';
+}
+
+document.getElementById('studentForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var rowId = document.getElementById('rowId').value;
+  var data = {
+    studentId: document.getElementById('studentId').value.trim(),
+    fullName: document.getElementById('fullName').value.trim(),
+    class: document.getElementById('classRoom').value.trim(),
+    gender: document.getElementById('gender').value,
+    age: document.getElementById('age').value,
+    weight: document.getElementById('weight').value,
+    height: document.getElementById('height').value
+  };
+
+  if (!data.studentId || !data.fullName || !data.class || !data.gender || !data.age || !data.weight || !data.height) {
+    Swal.fire('กรุณากรอกข้อมูลให้ครบทุกช่อง', '', 'warning');
+    return;
+  }
+
+  Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+
+  if (rowId) {
+    data.rowId = rowId;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        var r = JSON.parse(res);
+        Swal.fire('สำเร็จ!', r.message, 'success');
+        clearForm();
+        loadTeacherData();
+      })
+      .withFailureHandler(function(err) {
+        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+      })
+      .updateStudent(data);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        var r = JSON.parse(res);
+        Swal.fire('สำเร็จ!', r.message, 'success');
+        clearForm();
+        loadTeacherData();
+      })
+      .withFailureHandler(function(err) {
+        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+      })
+      .addStudent(data);
+  }
+});
+
+function loadTeacherData() {
+  Swal.fire({ title: 'กำลังโหลดข้อมูล...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+  google.script.run
+    .withSuccessHandler(function(res) {
+      Swal.close();
+      allData = JSON.parse(res);
+      renderTeacherTable(allData);
+    })
+    .withFailureHandler(function(err) {
+      Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+    })
+    .fetchData();
+}
+
+function renderTeacherTable(data) {
+  var tbody = document.getElementById('teacherTableBody');
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    html += '<tr class="hover:bg-blue-50 transition-colors">';
+    html += '<td class="px-4 py-3 font-medium">' + esc(r.studentId) + '</td>';
+    html += '<td class="px-4 py-3">' + esc(r.fullName) + '</td>';
+    html += '<td class="px-4 py-3">' + esc(r.class) + '</td>';
+    html += '<td class="px-4 py-3 text-center">' + esc(r.gender) + '</td>';
+    html += '<td class="px-4 py-3 text-center">' + esc(r.age) + '</td>';
+    html += '<td class="px-4 py-3 text-center">' + esc(r.weight) + '</td>';
+    html += '<td class="px-4 py-3 text-center">' + esc(r.height) + '</td>';
+    html += '<td class="px-4 py-3 text-center">';
+    html += '<button onclick="editRow(' + i + ')" class="btn-warning text-white px-3 py-1 rounded-lg text-xs font-semibold mr-1">แก้ไข</button>';
+    html += '<button onclick="deleteRow(' + r.rowId + ',\'' + esc(r.fullName) + '\')" class="btn-danger text-white px-3 py-1 rounded-lg text-xs font-semibold">ลบ</button>';
+    html += '</td></tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function editRow(idx) {
+  var r = allData[idx];
+  document.getElementById('rowId').value = r.rowId;
+  document.getElementById('studentId').value = r.studentId;
+  document.getElementById('fullName').value = r.fullName;
+  document.getElementById('classRoom').value = r.class;
+  document.getElementById('gender').value = r.gender;
+  document.getElementById('age').value = r.age;
+  document.getElementById('weight').value = r.weight;
+  document.getElementById('height').value = r.height;
+  document.getElementById('btnSave').textContent = 'อัปเดตข้อมูล';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function deleteRow(rowId, name) {
+  Swal.fire({
+    title: 'ยืนยันการลบ',
+    text: 'ต้องการลบข้อมูลของ "' + name + '" ใช่หรือไม่?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#e74c3c',
+    cancelButtonColor: '#95a5a6',
+    confirmButtonText: 'ลบ',
+    cancelButtonText: 'ยกเลิก'
+  }).then(function(result) {
+    if (result.isConfirmed) {
+      Swal.fire({ title: 'กำลังลบข้อมูล...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+      google.script.run
+        .withSuccessHandler(function(res) {
+          var r = JSON.parse(res);
+          Swal.fire('ลบสำเร็จ!', r.message, 'success');
+          loadTeacherData();
+        })
+        .withFailureHandler(function(err) {
+          Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+        })
+        .deleteStudent(rowId);
+    }
+  });
+}
+
+function uploadExcel() {
+  var fileInput = document.getElementById('excelFile');
+  if (!fileInput.files.length) {
+    Swal.fire('กรุณาเลือกไฟล์', '', 'warning');
+    return;
+  }
+  var file = fileInput.files[0];
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var data = new Uint8Array(e.target.result);
+    var workbook = XLSX.read(data, { type: 'array' });
+    var sheetName = workbook.SheetNames[0];
+    var sheet = workbook.Sheets[sheetName];
+    var jsonData = XLSX.utils.sheet_to_json(sheet);
+
+    if (jsonData.length === 0) {
+      Swal.fire('ไฟล์ว่างเปล่า', '', 'warning');
+      return;
+    }
+
+    Swal.fire({ title: 'กำลังนำเข้า ' + jsonData.length + ' รายการ...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        var r = JSON.parse(res);
+        Swal.fire('สำเร็จ!', r.message, 'success');
+        fileInput.value = '';
+        loadTeacherData();
+      })
+      .withFailureHandler(function(err) {
+        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+      })
+      .addMultipleStudents(jsonData);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadStudentData() {
+  Swal.fire({ title: 'กำลังโหลดข้อมูล...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+  google.script.run
+    .withSuccessHandler(function(res) {
+      Swal.close();
+      allData = JSON.parse(res);
+      document.getElementById('studentAnalysis').classList.remove('hidden');
+      renderStudentAnalysis(allData);
+    })
+    .withFailureHandler(function(err) {
+      Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+    })
+    .fetchData();
+}
+
+function calculateBMI(weight, height) {
+  var h = parseFloat(height) / 100;
+  if (h <= 0) return 0;
+  return (parseFloat(weight) / (h * h)).toFixed(2);
+}
+
+function getBMICategory(bmi) {
+  var b = parseFloat(bmi);
+  if (b < 18.5) return 'น้ำหนักต่ำกว่าเกณฑ์';
+  if (b < 23) return 'สมส่วน';
+  if (b < 25) return 'น้ำหนักเกิน';
+  if (b < 30) return 'อ้วนระดับ 1';
+  return 'อ้วนระดับ 2';
+}
+
+function getBMIColor(cat) {
+  if (cat === 'สมส่วน') return '#27ae60';
+  if (cat === 'น้ำหนักต่ำกว่าเกณฑ์') return '#3498db';
+  if (cat === 'น้ำหนักเกิน') return '#f39c12';
+  if (cat === 'อ้วนระดับ 1') return '#e67e22';
+  return '#e74c3c';
+}
+
+function renderStudentAnalysis(data) {
+  // คำนวณ BMI
+  for (var i = 0; i < data.length; i++) {
+    data[i].bmi = calculateBMI(data[i].weight, data[i].height);
+    data[i].bmiCategory = getBMICategory(data[i].bmi);
+  }
+
+  // นับสถิติ
+  var bmiCounts = {};
+  var genderCounts = { 'ชาย': 0, 'หญิง': 0 };
+  for (var i = 0; i < data.length; i++) {
+    var cat = data[i].bmiCategory;
+    bmiCounts[cat] = (bmiCounts[cat] || 0) + 1;
+    var g = data[i].gender;
+    if (genderCounts.hasOwnProperty(g)) genderCounts[g]++;
+  }
+
+  // กราฟ BMI
+  var bmiLabels = Object.keys(bmiCounts);
+  var bmiValues = Object.values(bmiCounts);
+  var bmiColors = bmiLabels.map(function(l) { return getBMIColor(l); });
+
+  if (bmiChartInstance) bmiChartInstance.destroy();
+  bmiChartInstance = new Chart(document.getElementById('bmiChart'), {
+    type: 'doughnut',
+    data: {
+      labels: bmiLabels,
+      datasets: [{ data: bmiValues, backgroundColor: bmiColors, borderWidth: 2 }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 12 } } } } }
+  });
+
+  // กราฟเพศ
+  var gLabels = Object.keys(genderCounts).filter(function(k) { return genderCounts[k] > 0; });
+  var gValues = gLabels.map(function(k) { return genderCounts[k]; });
+
+  if (genderChartInstance) genderChartInstance.destroy();
+  genderChartInstance = new Chart(document.getElementById('genderChart'), {
+    type: 'doughnut',
+    data: {
+      labels: gLabels,
+      datasets: [{ data: gValues, backgroundColor: ['#3498db', '#e74c3c', '#2ecc71', '#f39c12'], borderWidth: 2 }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { family: 'Kanit', size: 12 } } } } }
+  });
+
+  // ตาราง
+  renderStudentTable(data);
+}
+
+function renderStudentTable(data) {
+  var tbody = document.getElementById('studentTableBody');
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    var color = getBMIColor(r.bmiCategory);
+    html += '<tr class="hover:bg-blue-50 transition-colors">';
+    html += '<td class="px-3 py-3 font-medium">' + esc(r.studentId) + '</td>';
+    html += '<td class="px-3 py-3">' + esc(r.fullName) + '</td>';
+    html += '<td class="px-3 py-3 text-center">' + esc(r.gender) + '</td>';
+    html += '<td class="px-3 py-3 text-center">' + esc(r.weight) + '</td>';
+    html += '<td class="px-3 py-3 text-center">' + esc(r.height) + '</td>';
+    html += '<td class="px-3 py-3 text-center font-semibold">' + r.bmi + '</td>';
+    html += '<td class="px-3 py-3 text-center"><span style="background:' + color + ';color:white;padding:2px 10px;border-radius:20px;font-size:12px;">' + r.bmiCategory + '</span></td>';
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function filterStudentTable() {
+  var keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+  if (!keyword) {
+    renderStudentTable(allData);
+    return;
+  }
+  var filtered = allData.filter(function(r) {
+    return (r.studentId && String(r.studentId).toLowerCase().indexOf(keyword) > -1) ||
+           (r.fullName && r.fullName.toLowerCase().indexOf(keyword) > -1);
+  });
+  renderStudentTable(filtered);
+}
+
+function downloadCSV() {
+  if (allData.length === 0) {
+    Swal.fire('ไม่มีข้อมูลให้ดาวน์โหลด', '', 'warning');
+    return;
+  }
+  var csv = 'รหัสนักเรียน,ชื่อ-สกุล,ชั้น,เพศ,อายุ,น้ำหนัก,ส่วนสูง,BMI,เกณฑ์\n';
+  for (var i = 0; i < allData.length; i++) {
+    var r = allData[i];
+    var bmi = r.bmi || calculateBMI(r.weight, r.height);
+    var cat = r.bmiCategory || getBMICategory(bmi);
+    csv += '"' + r.studentId + '","' + r.fullName + '","' + r.class + '","' + r.gender + '",' + r.age + ',' + r.weight + ',' + r.height + ',' + bmi + ',"' + cat + '"\n';
+  }
+  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'student_weight_height_data.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+
+</body>
+</html>
